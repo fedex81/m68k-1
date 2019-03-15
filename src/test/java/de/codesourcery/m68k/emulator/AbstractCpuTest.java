@@ -7,20 +7,16 @@ import de.codesourcery.m68k.assembler.IObjectCodeWriter;
 import de.codesourcery.m68k.assembler.IResource;
 import de.codesourcery.m68k.assembler.SRecordHelper;
 import de.codesourcery.m68k.assembler.Symbol;
-import de.codesourcery.m68k.assembler.arch.CPUType;
 import de.codesourcery.m68k.assembler.arch.Condition;
 import de.codesourcery.m68k.assembler.arch.Instruction;
-import de.codesourcery.m68k.emulator.memory.Blitter;
-import de.codesourcery.m68k.emulator.memory.DMAController;
-import de.codesourcery.m68k.emulator.memory.MMU;
-import de.codesourcery.m68k.emulator.memory.Memory;
-import de.codesourcery.m68k.emulator.memory.Video;
+import de.codesourcery.m68k.emulator.memory.*;
 import de.codesourcery.m68k.parser.Identifier;
 import de.codesourcery.m68k.utils.Misc;
 import junit.framework.TestCase;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.junit.Ignore;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -31,9 +27,10 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class CPUTest extends TestCase
+@Ignore
+public abstract class AbstractCpuTest extends TestCase
 {
-    private static final Logger LOG = LogManager.getLogger( CPUTest.class.getName() );
+    private static final Logger LOG = LogManager.getLogger( AbstractCpuTest.class.getName() );
 
     private static final boolean DEBUG_DUMP_BINARY = true;
     private static final File DEBUG_BINARY = new File("/tmp/test.h68");
@@ -48,25 +45,9 @@ public class CPUTest extends TestCase
     // program start address in memory (in bytes)
     public static final int PROGRAM_START_ADDRESS = 4096;
 
-    private MMU mmu;
-    private Memory memory;
-    private CPU cpu;
+    protected MemoryInterface memory;
+    protected BaseCpu cpu;
     private CompilationUnit compilationUnit;
-
-    @Override
-    protected void setUp() throws Exception
-    {
-        super.setUp();
-        final Amiga amiga = Amiga.AMIGA_500;
-        final DMAController dmaCtrl = new DMAController();
-        final Blitter blitter = new Blitter( dmaCtrl );
-        final Video video = new Video(amiga,blitter,dmaCtrl);
-        mmu = new MMU( new MMU.PageFaultHandler(amiga,blitter, video ) );
-        memory = new Memory(mmu);
-        blitter.setMemory( memory );
-        video.setMemory( memory );
-        cpu = new CPU(CPUType.BEST,memory);
-    }
 
     public void testSubx()
     {
@@ -2612,35 +2593,35 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
 
         execute(cpu -> {},"BHI next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
-        execute(cpu -> cpu.carry(),"BLS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.zero(),"BLS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.carry(cpu),"BLS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu),"BLS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
         execute(cpu -> {},"BCC next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
         execute(cpu -> {},"BNE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
         execute(cpu -> {},"BVC next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
         execute(cpu -> {},"BPL next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
-        execute(cpu -> cpu.carry(),"BCS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.zero(),"BEQ next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.overflow(),"BVS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.negative(),"BMI next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.carry(cpu),"BCS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu),"BEQ next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu),"BVS next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu),"BMI next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
         // >=
-        execute(cpu -> cpu.negative().overflow(),"BGE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negativeAndOverflow(cpu),"BGE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
         execute(cpu -> {},"BGE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
         // <
-        execute(cpu -> cpu.negative(),"BLT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.overflow(),"BLT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu),"BLT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu),"BLT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
         // >
-        execute(cpu -> cpu.negative().overflow(),"BGT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negativeAndOverflow(cpu),"BGT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
         execute(cpu -> {} ,"BGT next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
 
         // <=
-        execute(cpu -> cpu.zero() ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.negative() ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
-        execute(cpu -> cpu.overflow() ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu) ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu) ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu) ,"BLE next\nILLEGAL\nnext:").expectPC( PROGRAM_START_ADDRESS + 4).notSupervisor();
     }
 
     public void testNOP() {
@@ -2655,30 +2636,30 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
 Mnemonic Condition Encoding Test
 BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
          */
-        execute(cpu -> cpu.carry(),"BHI next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.zero(),"BHI next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.carry(cpu),"BHI next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu),"BHI next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
 
         execute(cpu -> {},"BLS next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.carry(),"BCC next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.carry(cpu),"BCC next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
         execute(cpu -> {},"BCS next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.zero(),"BNE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu),"BNE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
         execute(cpu -> {},"BEQ next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.overflow(),"BVC next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu),"BVC next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
         execute(cpu -> {},"BVS next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.negative(),"BPL next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu),"BPL next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
         execute(cpu -> {},"BMI next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
 
-        execute(cpu -> cpu.negative(),"BGE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.overflow(),"BGE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu),"BGE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu),"BGE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
 
-        execute(cpu -> cpu.negative().overflow(),"BLT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negativeAndOverflow(cpu),"BLT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
 
-        execute(cpu -> cpu.negative() ,"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.overflow(),"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.zero(),"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negative(cpu) ,"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.overflow(cpu),"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.zero(cpu),"BGT next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
 
         execute(cpu -> {},"BLE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
-        execute(cpu -> cpu.negative().overflow(),"BLE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
+        execute(cpu -> CpuCoreHelper.negativeAndOverflow(cpu),"BLE next\nNOP\nnext: ILLEGAL").expectPC( PROGRAM_START_ADDRESS + 2).notSupervisor();
     }
 
     public void testExgDataData() {
@@ -2712,11 +2693,11 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
     public void testMoveToMemory()
     {
         final int adr = PROGRAM_START_ADDRESS+256;
-        execute(cpu -> cpu.memory.writeLong(adr,0x12345678) ,
+        execute(cpu -> cpu.getMemory().writeLong(adr,0x12345678) ,
                 "move.w #$1234,"+Misc.hex( adr+2 ))
                 .expectMemoryLong(adr,0x12341234);
 
-        execute(cpu -> cpu.memory.writeLong(adr,0x12345678) ,
+        execute(cpu -> cpu.getMemory().writeLong(adr,0x12345678) ,
                 "move.l #$87654321,"+Misc.hex( adr ))
                 .expectMemoryLong(adr,0x87654321);
     }
@@ -2724,17 +2705,17 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
     public void testMoveFromMemory()
     {
         final int adr = PROGRAM_START_ADDRESS+128;
-        execute(cpu -> cpu.memory.writeLong(adr,0x12345678) ,
+        execute(cpu -> cpu.getMemory().writeLong(adr,0x12345678) ,
                 "move.l #$ffffffff,d0",
                 "move.b "+Misc.hex( adr )+",d0")
                 .expectD0(0xffffff12);
 
-        execute(cpu -> cpu.memory.writeLong(adr,0x12345678) ,
+        execute(cpu -> cpu.getMemory().writeLong(adr,0x12345678) ,
                 "move.l #$ffffffff,d0",
                 "move.w "+Misc.hex( adr )+",d0")
                 .expectD0(0xffff1234);
 
-        execute(cpu -> cpu.memory.writeLong(adr,0x12345678) ,
+        execute(cpu -> cpu.getMemory().writeLong(adr,0x12345678) ,
                 "move.l #$ffffffff,d0",
                 "move.l "+Misc.hex( adr )+",d0")
                 .expectD0(0x12345678);
@@ -2889,13 +2870,13 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
                 .expectD0( 0xc0000000 )
                 .zero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "bchg #0,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128+1, 0x00 )
                 .notZero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128)+",a0",
                 "bchg #0,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128, 0x03 )
@@ -2953,12 +2934,12 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
                 "btst d1,d0")
                 .zero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "btst #0,(a0)")
                 .notZero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "btst #1,(a0)")
                 .zero().notSupervisor();
@@ -3034,13 +3015,13 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
                 .expectD0(0b11000000000000000000000000000000)
                 .zero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "bset #0,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128+1,0x01 )
                 .notZero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "bset #1,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128+1,0x03 )
@@ -3135,13 +3116,13 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
                 .expectD0(0b10000000000000000000000000000000)
                 .zero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "bclr #0,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128,0x02 )
                 .notZero().notSupervisor();
 
-        execute(cpu -> cpu.memory.writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
+        execute(cpu -> cpu.getMemory().writeWord( PROGRAM_START_ADDRESS+128, 0x0201 ) ,
                 "lea "+(PROGRAM_START_ADDRESS+128+1)+",a0",
                 "bclr #1,(a0)")
                 .expectMemoryByte( PROGRAM_START_ADDRESS+128+1,0x01 )
@@ -3183,25 +3164,25 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
         return execute(cpu->{},program);
     }
 
-    private ExpectionBuilder execute(String program,Consumer<CPU> cpuSetup)
+    private ExpectionBuilder execute(String program,Consumer<BaseCpu> cpuSetup)
     {
         return execute(cpuSetup,program);
     }
 
-    private ExpectionBuilder execute(Consumer<CPU> cpuSetup,String program1,String... additional)
+    private ExpectionBuilder execute(Consumer<BaseCpu> cpuSetup,String program1,String... additional)
     {
         int insCount = 1 + ( ( additional == null ) ? 0 : additional.length);
         return execute(cpuSetup,insCount,program1,additional);
     }
 
-    private ExpectionBuilder execute(Consumer<CPU> cpuSetup,int insToExecute,
+    private ExpectionBuilder execute(Consumer<BaseCpu> cpuSetup,int insToExecute,
                                      String program1,
                                      String... additional)
     {
         return execute(cpuSetup,insToExecute,false,program1,additional);
     }
 
-    private ExpectionBuilder execute(Consumer<CPU> cpuSetup,int insToExecute,
+    private ExpectionBuilder execute(Consumer<BaseCpu> cpuSetup,int insToExecute,
                                      boolean runInSuperVisorMode,
                                      String program1,
                                      String... additional)
@@ -3313,7 +3294,7 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
 
         public ExpectionBuilder expectTopOfStack(int expected)
         {
-            int actual = cpu.memory.readLong(cpu.addressRegisters[7] );
+            int actual = cpu.getMemory().readLong(cpu.getAddrRegisterLong(7) );
             return assertHexEquals( "value on top of stack mismatch" , expected, actual);
         }
 
@@ -3351,35 +3332,35 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
         public ExpectionBuilder dumpMemory(int startAddress,int byteCount)
         {
             LOG.info( "=== Dump at "+Misc.hex(startAddress)+" ===" );
-            LOG.info(  cpu.memory.hexdump(startAddress, byteCount)  );
+            LOG.info(  cpu.getMemory().hexdump(startAddress, byteCount)  );
             return this;
         }
 
-        public ExpectionBuilder expectD0(int value) { return assertHexEquals( "D0 mismatch" , value, cpu.dataRegisters[0]); }
-        public ExpectionBuilder expectD1(int value) { return assertHexEquals( "D1 mismatch" , value, cpu.dataRegisters[1]); }
-        public ExpectionBuilder expectD2(int value) { return assertHexEquals( "D2 mismatch" , value, cpu.dataRegisters[2]); }
-        public ExpectionBuilder expectD3(int value) { return assertHexEquals( "D3 mismatch" , value, cpu.dataRegisters[3]); }
-        public ExpectionBuilder expectD4(int value) { return assertHexEquals( "D4 mismatch" , value, cpu.dataRegisters[4]); }
-        public ExpectionBuilder expectD5(int value) { return assertHexEquals( "D5 mismatch" , value, cpu.dataRegisters[5]); }
-        public ExpectionBuilder expectD6(int value) { return assertHexEquals( "D6 mismatch" , value, cpu.dataRegisters[6]); }
-        public ExpectionBuilder expectD7(int value) { return assertHexEquals( "D7 mismatch" , value, cpu.dataRegisters[7]); }
+        public ExpectionBuilder expectD0(int value) { return assertHexEquals( "D0 mismatch" , value, cpu.getDataRegisterLong(0)); }
+        public ExpectionBuilder expectD1(int value) { return assertHexEquals( "D1 mismatch" , value, cpu.getDataRegisterLong(1)); }
+        public ExpectionBuilder expectD2(int value) { return assertHexEquals( "D2 mismatch" , value, cpu.getDataRegisterLong(2)); }
+        public ExpectionBuilder expectD3(int value) { return assertHexEquals( "D3 mismatch" , value, cpu.getDataRegisterLong(3)); }
+        public ExpectionBuilder expectD4(int value) { return assertHexEquals( "D4 mismatch" , value, cpu.getDataRegisterLong(4)); }
+        public ExpectionBuilder expectD5(int value) { return assertHexEquals( "D5 mismatch" , value, cpu.getDataRegisterLong(5)); }
+        public ExpectionBuilder expectD6(int value) { return assertHexEquals( "D6 mismatch" , value, cpu.getDataRegisterLong(6)); }
+        public ExpectionBuilder expectD7(int value) { return assertHexEquals( "D7 mismatch" , value, cpu.getDataRegisterLong(7)); }
 
-        public ExpectionBuilder expectA0(int value) { return assertHexEquals( "A0 mismatch" , value, cpu.addressRegisters[0]); }
-        public ExpectionBuilder expectA1(int value) { return assertHexEquals( "A1 mismatch" , value, cpu.addressRegisters[1]); }
-        public ExpectionBuilder expectA2(int value) { return assertHexEquals( "A2 mismatch" , value, cpu.addressRegisters[2]); }
-        public ExpectionBuilder expectA3(int value) { return assertHexEquals( "A3 mismatch" , value, cpu.addressRegisters[3]); }
-        public ExpectionBuilder expectA4(int value) { return assertHexEquals( "A4 mismatch" , value, cpu.addressRegisters[4]); }
-        public ExpectionBuilder expectA5(int value) { return assertHexEquals( "A5 mismatch" , value, cpu.addressRegisters[5]); }
-        public ExpectionBuilder expectA6(int value) { return assertHexEquals( "A6 mismatch" , value, cpu.addressRegisters[6]); }
-        public ExpectionBuilder expectA7(int value) { return assertHexEquals( "A7 mismatch" , value, cpu.addressRegisters[7]); }
+        public ExpectionBuilder expectA0(int value) { return assertHexEquals( "A0 mismatch" , value, cpu.getAddrRegisterLong(0)); }
+        public ExpectionBuilder expectA1(int value) { return assertHexEquals( "A1 mismatch" , value, cpu.getAddrRegisterLong(1)); }
+        public ExpectionBuilder expectA2(int value) { return assertHexEquals( "A2 mismatch" , value, cpu.getAddrRegisterLong(2)); }
+        public ExpectionBuilder expectA3(int value) { return assertHexEquals( "A3 mismatch" , value, cpu.getAddrRegisterLong(3)); }
+        public ExpectionBuilder expectA4(int value) { return assertHexEquals( "A4 mismatch" , value, cpu.getAddrRegisterLong(4)); }
+        public ExpectionBuilder expectA5(int value) { return assertHexEquals( "A5 mismatch" , value, cpu.getAddrRegisterLong(5)); }
+        public ExpectionBuilder expectA6(int value) { return assertHexEquals( "A6 mismatch" , value, cpu.getAddrRegisterLong(6)); }
+        public ExpectionBuilder expectA7(int value) { return assertHexEquals( "A7 mismatch" , value, cpu.getAddrRegisterLong(7)); }
         public ExpectionBuilder expectIRQLevel(int level) { return assertHexEquals( "IRQ level mismatch" , level, cpu.getIRQLevel() ); }
 
         public ExpectionBuilder cycles(int number) {
-            assertEquals("Expected CPU cycle count "+number+" but was "+cpu.cycles,number,cpu.cycles);
+            assertEquals("Expected CPU cycle count "+number+" but was "+cpu.getCycles(),number,cpu.getCycles());
             return this;
         }
 
-        public ExpectionBuilder expectPC(int value) { return assertHexEquals( "PC mismatch" , value, cpu.pc); }
+        public ExpectionBuilder expectPC(int value) { return assertHexEquals( "PC mismatch" , value, cpu.getPC()); }
 
         public ExpectionBuilder zero() { assertTrue( "Z flag not set ?" , cpu.isZero() ); return this; };
         public ExpectionBuilder notZero() { assertTrue( "Z flag set ?" , cpu.isNotZero() ); return this; };
@@ -3496,12 +3477,12 @@ BLE Less or Equal    1111 = Z | (N & !V) | (!N & V) (ok)
 
         public ExpectionBuilder noIrqActive()
         {
-            assertNull("Expected no CPU active but got "+cpu.activeIrq,cpu.activeIrq);
+            assertNull("Expected no CPU active but got "+cpu.getActiveIRQ(),cpu.getActiveIRQ());
             return this;
         }
 
         public ExpectionBuilder irqActive(CPU.IRQ irq) {
-            assertEquals("Expected "+irq+" but active IRQ was "+cpu.activeIrq,irq,cpu.activeIrq);
+            assertEquals("Expected "+irq+" but active IRQ was "+cpu.getActiveIRQ(),irq,cpu.getActiveIRQ());
             return this;
         }
 

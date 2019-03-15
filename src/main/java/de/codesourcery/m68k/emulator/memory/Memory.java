@@ -14,7 +14,7 @@ import org.apache.commons.lang3.StringUtils;
  *
  * @author tobias.gierke@code-sourcery.de
  */
-public class Memory
+public class Memory implements MemoryInterface
 {
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
 

@@ -10,6 +10,7 @@ import de.codesourcery.m68k.emulator.exceptions.CPUResetException;
 import de.codesourcery.m68k.emulator.exceptions.IllegalInstructionException;
 import de.codesourcery.m68k.emulator.exceptions.MemoryAccessException;
 import de.codesourcery.m68k.emulator.memory.Memory;
+import de.codesourcery.m68k.emulator.memory.MemoryInterface;
 import de.codesourcery.m68k.utils.DeduplicatingLogger;
 import de.codesourcery.m68k.utils.Misc;
 import de.codesourcery.m68k.utils.OpcodeFileReader;
@@ -30,7 +31,7 @@ import java.util.Map;
  *
  * @author tobias.gierke@code-sourcery.de
  */
-public class CPU
+public class CPU implements BaseCpu
 {
     private static final Logger LOG = LogManager.getLogger( CPU.class.getName() );
 
@@ -775,6 +776,16 @@ TODO: Not all of them apply to m68k (for example FPU/MMU ones)
         executeOneCycle();
     }
 
+    @Override
+    public int getAddrRegisterLong(int reg) {
+        return addressRegisters[reg];
+    }
+
+    @Override
+    public int getDataRegisterLong(int reg) {
+        return dataRegisters[reg];
+    }
+
     public void executeOneCycle()
     {
         if ( stopped ) { // TODO: Move above "--cycles" line so that cycles does not go below zero when CPU is stopped...
@@ -1314,14 +1325,10 @@ C — Set according to the last bit shifted out of the operand; cleared for a sh
         return this;
     }
 
-    // unit-testing helper method
-    public CPU overflow() { return setFlags(CPU.FLAG_OVERFLOW); }
-    // unit-testing helper method
-    public CPU carry() { return setFlags(CPU.FLAG_CARRY); }
-    // unit-testing helper method
-    public CPU negative() { return setFlags(CPU.FLAG_NEGATIVE); }
-    // unit-testing helper method
-    public CPU zero() { return setFlags(CPU.FLAG_ZERO); }
+    @Override
+    public boolean isFlagSet(int bitMask) {
+        return (statusRegister & bitMask) != 0;
+    }
 
     /**
      * Clears the all bits in the status register where the bit mask has a '1' bit.
@@ -1331,6 +1338,11 @@ C — Set according to the last bit shifted out of the operand; cleared for a sh
     public void clearFlags(int bitMask)
     {
         this.statusRegister &= ~bitMask;
+    }
+
+    @Override
+    public int getStatusRegister() {
+        return statusRegister;
     }
 
     /**
@@ -2382,6 +2394,27 @@ M->R    long	   18+8n      16+8n      20+8n	    16+8n      18+8n      12+8n	   1
         }
         statusRegister = ( statusRegister & ~0b111_0000_0000) | (level<<8);
     }
+
+    @Override
+    public MemoryInterface getMemory() {
+        return memory;
+    }
+
+    @Override
+    public IRQ getActiveIRQ() {
+        return activeIrq;
+    }
+
+    @Override
+    public int getPC() {
+        return pc;
+    }
+
+    @Override
+    public int getCycles() {
+        return cycles;
+    }
+
     /**
      * Returns the CPUs current interrupt level (0...7).
      *

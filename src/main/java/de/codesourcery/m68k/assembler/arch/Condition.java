@@ -1,6 +1,6 @@
 package de.codesourcery.m68k.assembler.arch;
 
-import de.codesourcery.m68k.emulator.CPU;
+import de.codesourcery.m68k.emulator.BaseCpu;
 import de.codesourcery.m68k.utils.Misc;
 
 /**
@@ -58,7 +58,7 @@ public enum Condition
         throw new RuntimeException("Unhandled value: "+bits);
     }
 
-    public static boolean isTrue(CPU cpu,int cc)
+    public static boolean isTrue(BaseCpu cpu, int cc)
     {
         final boolean C = cpu.isCarry();
         final boolean N = cpu.isNegative();
